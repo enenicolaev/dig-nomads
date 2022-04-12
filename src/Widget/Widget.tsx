@@ -12,7 +12,8 @@ type ProgressLoading =
   | WidgetLoadingStatus.ThirdStep;
 
 const LOADING_STEP_TIME = 2000;
-const FINAL_LOADING_STATUS: FinalLoading = WidgetLoadingStatus.ErrorLoading;
+const LOADING_TIMEOUT = 3000;
+
 
 const loadingSteps: ProgressLoading[] = [
   WidgetLoadingStatus.FirstStep,
@@ -22,50 +23,64 @@ const loadingSteps: ProgressLoading[] = [
 
 interface SomeConvenientWidgetProps {
   loadingStatus: WidgetLoadingStatus;
-  finalLoadingStatus: FinalLoading
+  finalLoadingStatus: FinalLoading;
 }
 
 export const SomeConvenientWidget: React.FC<SomeConvenientWidgetProps> = ({
   loadingStatus,
+  finalLoadingStatus,
 }) => {
   const [loadingStep, setLoadingStep] =
     useState<WidgetLoadingStatus>(loadingStatus);
 
   const loadingStepRef = useRef<WidgetLoadingStatus>(loadingStatus);
   const intervalRef = useRef<NodeJS.Timeout>();
+  const requestTime = useRef(0);
+
+  const updateState = (step: WidgetLoadingStatus) => {
+    loadingStepRef.current = step;
+    setLoadingStep(step);
+  };
+
+  const isLoading =
+    loadingStatus !== WidgetLoadingStatus.SuccessLoading &&
+    loadingStatus !== WidgetLoadingStatus.ErrorLoading;
 
   useEffect(() => {
-    if (
-      loadingStatus !== WidgetLoadingStatus.SuccessLoading &&
-      loadingStatus !== WidgetLoadingStatus.ErrorLoading
-    )
+    if (isLoading)
       intervalRef.current = setInterval(() => {
+        requestTime.current += LOADING_STEP_TIME;
+
+        if (requestTime.current >= LOADING_TIMEOUT) {
+          updateState(WidgetLoadingStatus.ErrorLoading);
+          clearInterval(Number(intervalRef?.current));
+
+          return;
+        }
+
         const currentStep = loadingSteps.findIndex(
           (step) => step === loadingStepRef.current
         );
-        console.log({ currentStep, loadingStep: loadingStepRef.current });
 
         if (currentStep === loadingSteps.length - 1) {
-          loadingStepRef.current = FINAL_LOADING_STATUS;
-          setLoadingStep(FINAL_LOADING_STATUS);
+          updateState(finalLoadingStatus);
           clearInterval(Number(intervalRef?.current));
 
           return;
         }
         if (currentStep > -1) {
-          const newStep = loadingSteps[currentStep + 1];
-          loadingStepRef.current = newStep;
-          setLoadingStep(newStep);
+          const nextStep = loadingSteps[currentStep + 1];
+          updateState(nextStep);
         }
       }, LOADING_STEP_TIME);
-  }, []);
+  }, [isLoading]);
 
   const { t } = useTranslation();
 
   return (
     <div className={styles.container}>
       <div className={styles.widget}>
-        <div className={styles.loader} />
+        {isLoading && <div className={styles.loader} />}
         <div>{t(`widget.${loadingStep}`)}</div>
       </div>
     </div>
